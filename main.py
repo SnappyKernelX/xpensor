@@ -43,16 +43,17 @@ def dt_time():
 
 
 def add_expenses(itm_category, itm_name, itm_price, date, time):
-    with open(EXP_PATH, "a+") as exp_file:
-        writer = csv.writer(exp_file)
-        exp_file.seek(0)
+    with open(EXP_PATH, "r") as exp_file:
         reader = csv.reader(exp_file)
         rows = list(reader)
-        sr = 1 #default sr
+    
+    sr = len(rows)
+
+    with open(EXP_PATH, "a", newline="") as exp_file:
+        writer = csv.writer(exp_file)
         if len(rows) == 0:
             writer.writerow(["sr.no", "item category", "item name", "item price", "date", "time"])
-        else:
-            sr = len(rows)
+            sr = 1 #default sr
         writer.writerow([sr, itm_category, itm_name, itm_price, date, time])
 
 

@@ -4,6 +4,7 @@ import time as tm
 from streamlit_option_menu import option_menu
 from main import dt_time, add_expenses, exp_is_valid, budg_is_valid, add_budget
 import altair as alt
+import base64
 
 
 
@@ -15,6 +16,24 @@ BUDGET_PATH = "data/budget.csv"
 
 
 date, time = dt_time()
+
+
+# UI customization | sidebar design | AI usage
+def sidebar_bg(image_path):
+    with open(image_path, "rb") as f:
+        data = base64.b64encode(f.read()).decode()
+    st.markdown(f"""
+        <style>
+        [data-testid="stSidebar"] {{
+            background-image: url("data:image/png;base64,{data}");
+            background-size: cover;
+            background-position: center;
+        }}
+        </style>
+    """, unsafe_allow_html=True)
+
+sidebar_bg("data/1.jpg")
+# sidebar design end
 
 
 def get_daily_chart(df):
@@ -123,6 +142,16 @@ def app(date, time):
     monthly_chart = get_monthly_chart(dt_df)
     category_chart = get_category_chart(dt_df)
 
+    st.markdown("""
+        <style>
+        .stApp {
+            background-color: #0c0c0c;
+            background-image: radial-gradient(#3a3a3c 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
 
     with st.sidebar:
         selected = option_menu(

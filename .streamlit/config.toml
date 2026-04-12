@@ -1,0 +1,9 @@
+[theme]
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap"
+backgroundColor = "#0c0c0c"
+secondaryBackgroundColor = "#2C2C2E"
+textColor = "#ffffff"
+primaryColor = "#e72929"
+
+
+
