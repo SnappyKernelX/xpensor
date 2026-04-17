@@ -41,6 +41,10 @@ def dt_time():
     time = tm_obj.isoformat(timespec='seconds')
     return date, time
 
+def dt_parse(str):
+    dt_p = dt.datetime.strptime(str, "%Y-%m-%d")
+    return dt_p.year, dt_p.month, dt_p.strftime("%B"), dt_p.day
+
 
 def add_expenses(itm_category, itm_name, itm_price, date, time):
     with open(EXP_PATH, "r") as exp_file:
@@ -62,10 +66,12 @@ def add_budget(budget, mo_date_str, time):
         budg_df = pd.read_csv(BUDGET_PATH)
     except (FileNotFoundError, pd.errors.EmptyDataError):
         budg_df = pd.DataFrame(columns=["budget", "month", "time"])
-    if mo_date_str in budg_df["month"].values:
-        budg_df.loc[budg_df["month"] == mo_date_str[:7], "budget"] = budget
+    budg_df["budget"] = budg_df["budget"].astype(str)
+    mo_key = mo_date_str[:7]
+    if mo_key in budg_df["month"].str[:7].values:
+        budg_df.loc[budg_df["month"].str[:7] == mo_key, "budget"] = budget
     else:
-        new_row = {"budget": budget, "month": mo_date_str[:7], "time": time}
+        new_row = {"budget": budget, "month": mo_date_str, "time": time}
         budg_df = pd.concat([budg_df, pd.DataFrame([new_row])], ignore_index=True)
     budg_df.to_csv(BUDGET_PATH, index=False)
 

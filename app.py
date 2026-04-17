@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import time as tm
 from streamlit_option_menu import option_menu
-from main import dt_time, add_expenses, exp_is_valid, budg_is_valid, add_budget
+from main import dt_time, add_expenses, exp_is_valid, budg_is_valid, add_budget, dt_parse
 import altair as alt
 import base64
 
@@ -18,7 +18,7 @@ BUDGET_PATH = "data/budget.csv"
 date, time = dt_time()
 
 
-# UI customization | sidebar design | AI usage
+# UI customization | sidebar, app design | @AI usage
 def sidebar_bg(image_path):
     with open(image_path, "rb") as f:
         data = base64.b64encode(f.read()).decode()
@@ -33,7 +33,7 @@ def sidebar_bg(image_path):
     """, unsafe_allow_html=True)
 
 sidebar_bg("data/1.jpg")
-# sidebar design end
+# sidebar design end.
 
 
 def get_daily_chart(df):
@@ -80,7 +80,7 @@ def get_monthly_chart(df):
             alt.Tooltip("item price:Q", title="Expenditure (in ₹)")
         ]
     )
-    return monthly_chart
+    return monthly_chart, monthly_sp
 
 
 def get_category_chart(df):
@@ -104,9 +104,9 @@ def read_budget():
     except (FileNotFoundError, pd.errors.EmptyDataError):
         return "File not found!!!!"
     if not budg_df_read.empty:
-        mnth_n_yr = budg_df_read.iloc[-1]["month"]
+        mnth_n_yr = budg_df_read.iloc[-1]["month"]    # here -1 means last row (latest entry)
         budget = budg_df_read.iloc[-1]["budget"]
-        return mnth_n_yr, budget
+        return mnth_n_yr, budget                      # mnth_n_yr is full date str: e.g 2025-03-22
     else:
         return "Empty budget file; add logs."
 
@@ -128,7 +128,7 @@ def categories_list():
 
 
 
-def app(date, time):
+def app(date, time):   # Main app code starts here:
 
     df = pd.read_csv(EXP_PATH)
     dt_df = df.copy()
@@ -166,7 +166,7 @@ def app(date, time):
 
                     ##### Filters
         """)
-        exp_df_choice = st.selectbox(
+        exp_df_choice = st.selectbox(   # in testing phase!
             "Choose a filter:",
             ["All time", "This week"]
         )
@@ -252,10 +252,10 @@ def app(date, time):
         st.subheader("\n")
         col21, col22, col23 = st.columns([1,1,1])
         with col21:
-            if "daily_default" not in st.session_state:         #to show daily data chart as default
+            if "daily_default" not in st.session_state:         # to show daily data chart as default
                 st.session_state.daily_default = True
             dly_but = st.button("daily expenses")
-        if dly_but:                                             #weekly data showing button
+        if dly_but:                                             # weekly data showing button
             st.session_state.daily_default = True
         if st.session_state.daily_default:
             st.subheader("Daily Expenses:")
@@ -272,16 +272,32 @@ def app(date, time):
             mon_but = st.button("monthly expenses")
         if mon_but:
             st.subheader("Monthly Expenses:")
-            st.altair_chart(monthly_chart, use_container_width=True)
+            st.altair_chart(monthly_chart[0], use_container_width=True)
 
 
     elif selected == "Budget":
         st.markdown("## Your Budget:")
         budg_read = read_budget()
+        budg_read_month_name = dt_parse(budg_read[0])[2]
+        budg_read_yr = dt_parse(budg_read[0])[0]
         if len(budg_read) == 2:
-            st.markdown(f"""\nBudget for month of {budg_read[0]} is:\n #### ₹{budg_read[1]}""")
-        if len(budg_read) == 1:
+            st.markdown(f"""\nBudget for month of {budg_read_month_name} {budg_read_yr} is:\n #### ₹{budg_read[1]}""")
+        elif len(budg_read) == 1:
             st.write(budg_read[0])
+        
+        monthly_sp_1 = get_monthly_chart(dt_df)[1]           # This is aggregate of spending in a month i.e monthly_sp, rebranded as monthly_sp_1
+
+        monthly_sp_1["date"] = monthly_sp_1["date"].astype(str).str[:7]
+        monthly_sp_1 = monthly_sp_1.set_index("date")
+
+        total_sp_of_budg_mo = monthly_sp_1.loc[budg_read[0][:7]]["item price"]          # Total spending of latest month of which budget added
+        total_sp_of_budg_mo = int(total_sp_of_budg_mo)
+        budget_of_mo = int(budg_read[1])
+
+        perc_spent = int((total_sp_of_budg_mo/budget_of_mo)*100)
+        status_text = f"You have spent {perc_spent}% of your budget."
+        prog_bar = st.progress(perc_spent, text=status_text)
+        
 
     elif selected == "Category spending":
         st.subheader("Category wise spending:")
