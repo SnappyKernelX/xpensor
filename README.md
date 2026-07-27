@@ -11,19 +11,19 @@ The project currently uses **CSV files** as its storage backend to keep the appl
 ## Screenshots
 
 ### Home
-![Home](images/home.png)
+![Home](images/Homepage.png)
 
 ### Expense Dashboard
-![Dashboard](images/dashboard.png)
+![Dashboard](images/chart_1.png)
 
 ### Budget Overview
-![Budget](images/budget.png)
+![Budget](images/spending_bar.png)
 
 ### Category Analytics
-![Categories](images/categories.png)
+![Categories](images/chart_2.png)
 
 ### Expense History
-![Expenses](images/expenses.png)
+![Expenses](images/csv.png)
 
 ---
 
