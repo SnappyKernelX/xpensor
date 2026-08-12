@@ -65,6 +65,9 @@ XPENSOR/
 │   ├── budget.csv
 │   └── background.jpg
 │
+├── .streamlit/
+│   └── config.toml
+│   
 ├── images/
 │   └── screenshots...
 │
