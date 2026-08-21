@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import time as tm
 from streamlit_option_menu import option_menu
-from main import dt_time, add_expenses, exp_is_valid, budg_is_valid, add_budget, dt_parse
+from main import dt_time, add_expenses, exp_is_valid, budg_is_valid, add_budget, dt_parse, get_expenses, get_db
 import altair as alt
 import base64
 
@@ -13,10 +13,7 @@ EXP_PATH = "data/expenses.csv"
 BUDGET_PATH = "data/budget.csv"
 #declarations end.
 
-
-
 date, time = dt_time()
-
 
 # UI customization | sidebar, app design | @AI usage
 def sidebar_bg(image_path):
@@ -37,7 +34,7 @@ sidebar_bg("data/1.jpg")
 
 
 def get_daily_chart(df):
-    daily_sp = df.resample("D", on="date")["item price"].sum()
+    daily_sp = df.resample("D", on="date")["price"].sum()
     end_date = pd.Timestamp.now().normalize()
     start_date = end_date - pd.Timedelta(days=7)
     full_range = pd.date_range(start=start_date, end=end_date, freq="D")
@@ -46,69 +43,93 @@ def get_daily_chart(df):
     daily_sp = daily_sp.reset_index()
     daily_chart = alt.Chart(daily_sp).mark_line(point=True).encode(
         x=alt.X("date:T", title="Last 7 days", axis=alt.Axis(tickCount="day", format="%b %d")),
-        y=alt.Y("item price:Q", title="Expenditure (in ₹)"),
+        y=alt.Y("price:Q", title="Expenditure (in ₹)"),
         tooltip=[
             alt.Tooltip("date:T", title="Date"),
-            alt.Tooltip("item price:Q", title="Expenditure (in ₹)")
+            alt.Tooltip("price:Q", title="Expenditure (in ₹)")
         ]
     )
     return daily_chart
 
 
 def get_weekly_chart(df):
-    weekly_sp = df.resample("W", on="date")["item price"].sum()
+    weekly_sp = df.resample("W", on="date")["price"].sum()
     weekly_sp = weekly_sp.reset_index()
     weekly_chart = alt.Chart(weekly_sp).mark_line(point=True).encode(
         x=alt.X("date:T", title="Weeks"),
-        y=alt.Y("item price:Q", title="Expenditure (in ₹)"),
+        y=alt.Y("price:Q", title="Expenditure (in ₹)"),
         tooltip=[
             alt.Tooltip("date:T", title="Date (week_till)"),
-            alt.Tooltip("item price:Q", title="Expenditure (in ₹)")
+            alt.Tooltip("price:Q", title="Expenditure (in ₹)")
         ]
     )
     return weekly_chart
 
 
 def get_monthly_chart(df):
-    monthly_sp = df.resample("ME", on="date")["item price"].sum()
+    monthly_sp = df.resample("ME", on="date")["price"].sum()
     monthly_sp = monthly_sp.reset_index()
     monthly_chart = alt.Chart(monthly_sp).mark_line(point=True).encode(
         x=alt.X("date:T", timeUnit="yearmonth", title="Month"),
-        y=alt.Y("item price:Q", title="Expenditure (in ₹)"),
+        y=alt.Y("price:Q", title="Expenditure (in ₹)"),
         tooltip=[
             alt.Tooltip("date:T", timeUnit="yearmonth", title="Month"),
-            alt.Tooltip("item price:Q", title="Expenditure (in ₹)")
+            alt.Tooltip("price:Q", title="Expenditure (in ₹)")
         ]
     )
     return monthly_chart, monthly_sp
 
 
 def get_category_chart(df):
-    category_sp = df.groupby("item category")["item price"].sum()
+    category_sp = df.groupby("category")["price"].sum()
     category_sp = category_sp.reset_index()
     category_chart = alt.Chart(category_sp).mark_bar().encode(
-        x=alt.X("item price:Q", title="Expenditure (in ₹)"),
-        y=alt.Y("item category:N", title="Categories", axis=alt.Axis(labelAngle=0)),
-        color="item category:N",
+        x=alt.X("price:Q", title="Expenditure (in ₹)"),
+        y=alt.Y("category:N", title="Categories", axis=alt.Axis(labelAngle=0)),
+        color="category:N",
         tooltip=[
-            alt.Tooltip("item price:Q", title="spending (in ₹)"),
-            alt.Tooltip("item category:N", title="Category")
+            alt.Tooltip("price:Q", title="spending (in ₹)"),
+            alt.Tooltip("category:N", title="Category")
         ]
     )
-    return category_chart
+    return category_chart, category_sp
+
+
+def get_spsplit_donutchart(category_chart):
+    category_sp = category_chart[1]
+    category_sp["percent"] = category_sp["price"] / category_sp["price"].sum()
+    donutchart = alt.Chart(category_sp).mark_arc(innerRadius=80, outerRadius=150).encode(
+        theta=alt.Theta("price:Q"),
+        color=alt.Color("category:N"),
+        tooltip=[
+            alt.Tooltip("category:N", title="Category"),
+            alt.Tooltip("price:Q", title="spending (in ₹)"),
+            alt.Tooltip("percent:Q", title="Percentage", format=".1%")
+        ]
+    )
+    return donutchart
+
 
 
 def read_budget():
-    try:
-        budg_df_read = pd.read_csv(BUDGET_PATH)
-    except (FileNotFoundError, pd.errors.EmptyDataError):
-        return "File not found!!!!"
-    if not budg_df_read.empty:
-        mnth_n_yr = budg_df_read.iloc[-1]["month"]    # here -1 means last row (latest entry)
-        budget = budg_df_read.iloc[-1]["budget"]
-        return mnth_n_yr, budget                      # mnth_n_yr is full date str: e.g 2025-03-22
-    else:
-        return "Empty budget file; add logs."
+    date, time = dt_time()
+    current_month = date[:7]
+
+    with get_db() as conn:
+        row = conn.execute("""
+            SELECT month, budget
+            FROM budgets
+            WHERE month = ?
+        """, (current_month,)).fetchone()
+
+    if row is None:
+        return None, None
+
+    mnth_n_yr = f"{row[0]}-01"
+    budget = row[1]
+
+    # mnth_n_yr is full date str: e.g 2025-03-01
+    return mnth_n_yr, budget
 
 
 
@@ -120,7 +141,7 @@ def categories_list():
         "transport",
         "personal",
         "health",
-        "Entertainment",
+        "entertainment",
         "subscriptions",
         "miscellaneous"
     ]
@@ -128,12 +149,13 @@ def categories_list():
 
 
 
-def app(date, time):   # Main app code starts here:
+# Main app code starts here:
+def app(date, time):   
 
-    df = pd.read_csv(EXP_PATH)
-    dt_df = df.copy()
-    reverse_df = df.copy()
-    reverse_df = reverse_df[::-1]
+    df = get_expenses()
+    df["date"] = pd.to_datetime(df["date"])
+    dt_df = df.copy()  # dataframe copied for datetime manipulation
+    reverse_df = df.copy()[::-1]
     dt_df["date"] = pd.to_datetime(dt_df["date"])
 
 
@@ -141,6 +163,7 @@ def app(date, time):   # Main app code starts here:
     weekly_chart = get_weekly_chart(dt_df)
     monthly_chart = get_monthly_chart(dt_df)
     category_chart = get_category_chart(dt_df)
+    donutchart = get_spsplit_donutchart(category_chart)
 
     st.markdown("""
         <style>
@@ -166,7 +189,7 @@ def app(date, time):   # Main app code starts here:
 
                     ##### Filters
         """)
-        exp_df_choice = st.selectbox(   # in testing phase!
+        exp_df_choice = st.selectbox(                   # in development phase!
             "Choose a filter:",
             ["All time", "This week"]
         )
@@ -205,8 +228,8 @@ def app(date, time):   # Main app code starts here:
                         msg = st.empty()
                         msg.error("""
                                     Please enter expense in this format:
-                                    :blue[category name, item name, price]
-                                    dont use comma(,) in item name
+                                    :blue[category name, item_name, price]
+                                    dont use comma(,) in item_name
                                     (category name is optional; and price without any symbol.)
                                     """)
                         tm.sleep(5)
@@ -276,33 +299,45 @@ def app(date, time):   # Main app code starts here:
 
 
     elif selected == "Budget":
-        st.markdown("## Your Budget:")
+        st.markdown("# Your Budget:")
         budg_read = read_budget()
-        budg_read_month_name = dt_parse(budg_read[0])[2]
-        budg_read_yr = dt_parse(budg_read[0])[0]
-        if len(budg_read) == 2:
-            st.markdown(f"""\nBudget for month of {budg_read_month_name} {budg_read_yr} is:\n #### ₹{budg_read[1]}""")
-        elif len(budg_read) == 1:
-            st.write(budg_read[0])
+        if budg_read[0] is not None:
+            budg_read_month_name = dt_parse(budg_read[0])[2]
+            budg_read_yr = dt_parse(budg_read[0])[0]
+            
+            st.markdown(f"""\n ### Budget for month of {budg_read_month_name} {budg_read_yr} is:   ₹{budg_read[1]}""")
         
-        monthly_sp_1 = get_monthly_chart(dt_df)[1]           # This is aggregate of spending in a month i.e monthly_sp, rebranded as monthly_sp_1
+            monthly_sp_1 = get_monthly_chart(dt_df)[1]           # This is aggregate of spending in a month i.e monthly_sp, rebranded as monthly_sp_1
 
-        monthly_sp_1["date"] = monthly_sp_1["date"].astype(str).str[:7]
-        monthly_sp_1 = monthly_sp_1.set_index("date")
+            monthly_sp_1["date"] = monthly_sp_1["date"].astype(str).str[:7]
+            monthly_sp_1 = monthly_sp_1.set_index("date")
 
-        total_sp_of_budg_mo = monthly_sp_1.loc[budg_read[0][:7]]["item price"]          # Total spending of latest month of which budget added
-        total_sp_of_budg_mo = int(total_sp_of_budg_mo)
-        budget_of_mo = int(budg_read[1])
+            total_sp_of_budg_mo = monthly_sp_1.loc[budg_read[0][:7]]["price"]          # Total spending of latest month of which budget added
+            total_sp_of_budg_mo = int(total_sp_of_budg_mo)
+            budget_of_mo = int(budg_read[1])
 
-        perc_spent = int((total_sp_of_budg_mo/budget_of_mo)*100)
-        status_text = f"You have spent {perc_spent}% of your budget."
-        prog_bar = st.progress(perc_spent, text=status_text)
+            perc_spent = int((total_sp_of_budg_mo/budget_of_mo)*100)
+            status_text = f"You have spent {perc_spent}% of your budget."
+            st.subheader("\n")
+            prog_bar = st.progress(perc_spent, text=status_text)
+
+            st.subheader("\n")
+            category_sp_1 = get_category_chart(dt_df)[1]
+            catgry_row = category_sp_1.loc[category_sp_1["price"].idxmax()]
+            max_spent_catgry_sp = catgry_row["price"]                        # Actual spending on "max spent category"
+            max_spent_catgry_nm = catgry_row["category"]
+            st.text(f"The categoty on which you have spent the most of your budget is: '{max_spent_catgry_nm}' (₹{max_spent_catgry_sp})")
+
+        else:
+            st.write("No budget set for current month.")
         
 
     elif selected == "Category spending":
         st.subheader("Category wise spending:")
-        st.altair_chart(category_chart, use_container_width=True)
-
+        st.altair_chart(category_chart[0], use_container_width=True)
+        st.subheader("\n")
+        st.subheader("Spending split: ")
+        st.altair_chart(donutchart, use_container_width=True)
 
 
 
